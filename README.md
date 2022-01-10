@@ -171,4 +171,52 @@ Import example Docker [dashboard](https://grafana.com/grafana/dashboards/1150)
 
 # Prometheus
 
+// TODO: no agents - Prometheous is a PULL architecture - its job is to scrape endpoints at specific intervals
+
+// TODO: refer https://prometheus.io/docs/introduction/comparison/
+
+chart installation
+
+```console
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install prometheus prometheus-community/prometheus -n monitoring
+```
+
+
+![](img/prometheus-components.png)
+
+Setup Graphana datasource the same way
+
+```
+server-url: http://prometheus-server.monitoring.svc:80
+```
+Grafana dashboard id - 7249 - [Kubernetes Cluster](https://grafana.com/grafana/dashboards/7249)
+
+![](img/prometheus-cluster-dashboard.png)
+
+## Access Prometheus UI
+
+```console
+export POD_NAME=$(kubectl get pods --namespace monitoring -l "app=prometheus,component=server" -o jsonpath="{.items[0].metadata.name}")
+kubectl --namespace monitoring port-forward $POD_NAME 8080:9000
+```
+
+### Example of scraped metrics
+![](img/prom-ui-01.png)
+
+### List of scraped targets
+![](img/prometheous-ui-02.png)
+
+### Interactive queries
+
+Query:
+`avg(container_memory_usage_bytes{pod=~"grafana-5b5777758-x8wh9"})`
+
+![](img/prometheus-interactive-queries.png)
 # Graphite
+
+
+# PromQL vs InfluxQl vs [Graphite]
+
+// TODO
+
