@@ -7,6 +7,11 @@ Purpose of this repository is a comparison of three kubernetes metrics storages 
 - kubectl
 - helm
 
+It may be needed to allow access to ports by disabling firewall:
+```console
+$ sudo ufw allow PORT_NUMBER
+```
+
 ## setup - k8s cluster
 
 Only for demonstration purposes we 
@@ -214,6 +219,26 @@ Query:
 
 ![](img/prometheus-interactive-queries.png)
 # Graphite
+
+Installation:
+```console
+$ helm repo add kiwigrid https://kiwigrid.github.io/
+$ helm install graphite -n monitoring kiwigrid/graphite
+```
+
+Port-forward:
+```console
+$ export POD_NAME=$(kubectl get pods --namespace monitoring -l "app.kubernetes.io/name=graphite,app.kubernetes.io/instance=graphite" -o jsonpath="{.items[0].metadata.name}")
+$ echo "Visit http://127.0.0.1:8080 to use your application"
+$ kubectl -n monitoring port-forward $POD_NAME 8080:80
+```
+
+Used Graphite image automatically contains collectd deamon which is supporting metrics of the pod.
+
+It is possible to view metrics directly from the Graphite dashboard, example with number of HTTP 200 responses is shown below:
+![](img/graphite-dashboard.png)
+
+
 
 
 # PromQL vs InfluxQl vs [Graphite]
