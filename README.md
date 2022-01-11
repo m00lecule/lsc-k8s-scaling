@@ -14,7 +14,7 @@ $ sudo ufw allow PORT_NUMBER
 
 ## setup - k8s cluster
 
-Only for demonstration purposes we 
+Only for demonstration purposes we use Kubernetes clusters locally with MiniKube.
 
 ```console
 $ minikube version      
@@ -35,36 +35,63 @@ docker@lsc:~$ sudo chmod 666 /var/run/docker.sock
 ```
 # Grafana
 
+Grafana is an open-source software made by GrafanaLabs which allows its user to query and visualize given metrics. It is compatible and easy connectable with InfluxDB, Prometheus and Graphite what was the main reason of decision of using it for project results' presentation.
+
+The most suitable method to use it with Kubernetes is to install it with helm:
+
 ```console
 $ helm repo add grafana https://grafana.github.io/helm-charts
 $ helm install grafana -n monitoring grafana/grafana
 ```
 
-Fetch secret - admin password:
+Fetch secret - admin password needed to login to the Grafana Dashboard from browser:
 
 ```console
 $ kubectl get secret --namespace default grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
 ```
 
+The method to view Grafana Dashboard is presented in the next section of this report.
+
 # InfluxDb
 
 // TODO: Telegraf
 
+InfluxDB is an open-source database designed for time series storage by InfluxLabs. Data is stored in tables or in trees and for every piece of it a _time column with a timestamp is present.
 
-// lineprotocol - https://docs.influxdata.com/influxdb/cloud/reference/syntax/line-protocol/
+## Line protocol
 
+Data points are written with use of the line protocol. This text-based format consists of the following elements:
+* Measurement - measurement name (required)
+* Tag set - tag key-value pairs for particular point (optional)
+* Field set - all field key-value pairs for the point (required)
+* Timestamp - the Unix timestamp for the data point (optional)
+* Whitespace - non-escaped whitespaces delimit elements of a data point, the former separates Measurement and Tag set from Field set while the latter separates Field set from Timestamp.
 
-// HA kosztuje $$ https://docs.influxdata.com/influxdb/v1.8/guides/hardware_sizing/#single-node-or-cluster
+Example:
+```
+measurementName,tagKey=tagValue fieldKey="fieldValue" 1465839830100400200
+```
 
-//duże wymagania startowe https://docs.influxdata.com/influxdb/v1.8/guides/hardware_sizing/#influxdb-oss-guidelines
+## Costs and requirements
+
+While InfluxDB for single node is fully open source, for a bigger performance an Enterprise version is needed. The documentation states that single node does not require redundancy but it is a dangerous case, due to failure of writes and queries when a server is unavailable. A demand for high-performance is defined as one of the following:
+* more than 750,000 writes per second
+* more than 100 moderate queries per second
+* more than 10,000,000 series cardinality
+
+From hardware side, it is recommended to use SSDs to store data. In addition other requirements are rather big:
+![](img/influx-db-req.png)
+<sub><sup>Screenshot taken from official website: https://docs.influxdata.com/influxdb/v1.8/guides/hardware_sizing/#influxdb-oss-guidelines</sup><sub>
+
+## Installation on Kubernetes
 
 ```console
 $ helm repo add influxdata https://helm.influxdata.com
 $ helm upgrade -i influxdb influxdata/influxdb
 ```
-##
 
-port-forward
+## Port-forwarding for Grafana
+
 ```console
 export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=grafana" -o jsonpath="{.items[0].metadata.name}")
 
@@ -73,7 +100,9 @@ kubectl --namespace default port-forward $POD_NAME 3000
 
 ## Telegraf
 
-Telegraf installation
+Telegraf is used here to provide metrics source for InfluxDB.
+
+Installation:
 ```console
 $ KUBERNETES_HOST=$(minikube -p lsc ip)
 $ helm upgrade --install -n monitoring telegraf-ds \
@@ -91,9 +120,9 @@ kubectl describe cm -n monitoring telegraf-ds | grep -C 1 docker
 endpoint = "unix:///var/run/docker.sock"
 ```
 
-## verify if metrics are sunk into InfluxDb
+## Verify if metrics are sunk into InfluxDb
 
-from inside of InfluxDb container find if the **telegraf** database has been created
+From inside of InfluxDb container find if the **telegraf** database has been created:
 
 ```console
 $ influx
@@ -245,3 +274,8 @@ It is possible to view metrics directly from the Graphite dashboard, example wit
 
 // TODO
 
+# References
+
+* [Grafana](https://grafana.com/)
+* [InfluxDB](https://www.influxdata.com/)
+* [Telegraf](https://www.influxdata.com/integration/kubernetes-monitoring/)
