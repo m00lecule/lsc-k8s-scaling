@@ -286,13 +286,13 @@ Used Graphite image automatically contains collectd deamon which is supporting m
 It is possible to view metrics directly from the Graphite dashboard, example with number of HTTP 200 responses is shown below:
 ![](img/graphite-dashboard.png)
 
-# Influx DB vs Prometheus vs Graphite
+# InfluxDB vs Prometheus vs Graphite
 
-// TODO: refer https://prometheus.io/docs/introduction/comparison/
+InfluxDB and Graphite are mostly focused on storage of time series data, while Prometheus is more complicated system which includes e.g. trending and alerting tools. What is more, Prometheus is more like a pull architecture while the others needs their data to be directly pushed to them.
 
-# PromQL vs InfluxQl vs [Graphite]
+In terms of data model the one used in Prometheus and InfluxDB is richer than in Graphite and allows user to explicitly declare dimensions of data which allows easy filtering and aggregation of it. Graphite data model is designed to better work with aggregated data while in the others it is possible to store separate similar fields.
 
-// TODO
+InfluxDB has the most suitable data storage for event logging which is a variant of merge tree. Graphite data storage is simple and most suitable for data coming in equal time intervals, while Prometheus could handle short "impulses" of short-lived changing sets of time series.
 
 # References
 
