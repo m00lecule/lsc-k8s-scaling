@@ -257,13 +257,24 @@ Query:
 
 # Graphite
 
-Installation:
+Graphite is a project designed especially for monitoring metrics with push architecture - the tool is fed by external agents, e.g. collectd deamon. It is capable of storage of time series data and renedering graphs on user demand. It has its own dashboard for plotting pictures, however it is also easily pluggable into Grafana.
+
+It was designed to be not too much demanding software, available also for cheaper architectures. It consists of 3 components:
+* carbon - deamon listening for time-series data
+* whisper - database library for storing time-series data
+* graphite webapp - web application in Django responsible for graph rendering
+
+The user's effort with usage of Graphite lays on collection of data and sending it to carbon.
+
+Graphite is described as good horizontally scalling tool. It also is able to handle multiple data at a moment - I/O operations are usually small and even in the case of limited I/O operations of storage device it is able to keep data in cache until writing of all amount of it is possible.
+
+## Installation:
 ```console
 $ helm repo add kiwigrid https://kiwigrid.github.io/
 $ helm install graphite -n monitoring kiwigrid/graphite
 ```
 
-Port-forward:
+## Port-forward:
 ```console
 $ export POD_NAME=$(kubectl get pods --namespace monitoring -l "app.kubernetes.io/name=graphite,app.kubernetes.io/instance=graphite" -o jsonpath="{.items[0].metadata.name}")
 $ echo "Visit http://127.0.0.1:8080 to use your application"
@@ -289,3 +300,4 @@ It is possible to view metrics directly from the Graphite dashboard, example wit
 * [InfluxDB](https://www.influxdata.com/)
 * [Telegraf](https://www.influxdata.com/integration/kubernetes-monitoring/)
 * [Prometheus](https://prometheus.io/)
+* [Graphite](https://graphiteapp.org/)
