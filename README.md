@@ -33,6 +33,11 @@ $ minikube -p lsc ssh
 Last login: Sun Jan  9 19:20:59 2022 from 192.168.49.1
 docker@lsc:~$ sudo chmod 666 /var/run/docker.sock
 ```
+
+# Metrics
+
+In general, metrics are numeric measurements recorded over time, so they could be understood as time series. Example pack of metrics for web application includes number of requests per time unit, response code statistics, average CPU usage, etc. In this project we measure metrics for Kubernetes pod with instance of each studied technology.
+
 # Grafana
 
 Grafana is an open-source software made by GrafanaLabs which allows its user to query and visualize given metrics. It is compatible and easy connectable with InfluxDB, Prometheus and Graphite what was the main reason of decision of using it for project results' presentation.
@@ -54,9 +59,7 @@ The method to view Grafana Dashboard is presented in the next section of this re
 
 # InfluxDb
 
-// TODO: Telegraf
-
-InfluxDB is an open-source database designed for time series storage by InfluxLabs. Data is stored in tables or in trees and for every piece of it a _time column with a timestamp is present.
+InfluxDB is an open-source database designed for time series storage by InfluxLabs. Data is stored in tables or in trees and for every piece of it a _time column with a timestamp is present. This is an example of push architecture - data must be directly written into the database. It is similar to SQL databases but is additionally optimized to handle time series data. In addition, a query language InfluxQl similar to SQL has been designed.
 
 ## Line protocol
 
@@ -205,11 +208,15 @@ Import example Docker [dashboard](https://grafana.com/grafana/dashboards/1150)
 
 # Prometheus
 
-// TODO: no agents - Prometheous is a PULL architecture - its job is to scrape endpoints at specific intervals
+Prometheus is an open-source set of systems designed for monitoring and alerting. It is able to store metrics as time series data. It also does not need agents to push data directly into database, it has an opportunity tu pull metrics from defined endopints.
 
-// TODO: refer https://prometheus.io/docs/introduction/comparison/
+It is designed for high reliability, even under failure conditions, so it suits problems when 100% accuracy is not a crucial issue.
 
-chart installation
+All data is stored as time series, defined here as streams of timestamped values belonging to one of defined metrics identified by unique metric names.
+
+Like InfluxDB, Prometheus has also its own query language named PrometheusQL.
+
+## Chart installation
 
 ```console
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -219,7 +226,7 @@ helm install prometheus prometheus-community/prometheus -n monitoring
 
 ![](img/prometheus-components.png)
 
-Setup Graphana datasource the same way
+## Setup Graphana datasource the same way
 
 ```
 server-url: http://prometheus-server.monitoring.svc:80
@@ -247,6 +254,7 @@ Query:
 `avg(container_memory_usage_bytes{pod=~"grafana-5b5777758-x8wh9"})`
 
 ![](img/prometheus-interactive-queries.png)
+
 # Graphite
 
 Installation:
@@ -267,8 +275,9 @@ Used Graphite image automatically contains collectd deamon which is supporting m
 It is possible to view metrics directly from the Graphite dashboard, example with number of HTTP 200 responses is shown below:
 ![](img/graphite-dashboard.png)
 
+# Influx DB vs Prometheus vs Graphite
 
-
+// TODO: refer https://prometheus.io/docs/introduction/comparison/
 
 # PromQL vs InfluxQl vs [Graphite]
 
@@ -279,3 +288,4 @@ It is possible to view metrics directly from the Graphite dashboard, example wit
 * [Grafana](https://grafana.com/)
 * [InfluxDB](https://www.influxdata.com/)
 * [Telegraf](https://www.influxdata.com/integration/kubernetes-monitoring/)
+* [Prometheus](https://prometheus.io/)
