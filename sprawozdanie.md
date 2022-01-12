@@ -12,7 +12,7 @@ It may be needed to allow access to ports by disabling firewall:
 $ sudo ufw allow PORT_NUMBER
 ```
 
-## setup - k8s cluster
+## Setup
 
 Only for demonstration purposes we use Kubernetes clusters locally with MiniKube.
 
@@ -33,14 +33,27 @@ $ minikube -p lsc ssh
 Last login: Sun Jan  9 19:20:59 2022 from 192.168.49.1
 docker@lsc:~$ sudo chmod 666 /var/run/docker.sock
 ```
+and please create `monitoring` namespace
+
+```console
+kubectl create ns monitoring
+```
 
 # Metrics
 
 In general, metrics are numeric measurements recorded over time, so they could be understood as time series. Example pack of metrics for web application includes number of requests per time unit, response code statistics, average CPU usage, etc. In this project we measure metrics for Kubernetes pod with instance of each studied technology.
 
+# Scenario
+
+Main goal of this project is to deploy each service on localhost kubernetes cluster and integrate with most popular dashboarding solution - Grafana.
+Another aspect to explore is to verify wheater those solutions are compatible as a source for metrics for kubernetes autoscaling.
+
+
 # Grafana
 
 Grafana is an open-source software made by GrafanaLabs which allows its user to query and visualize given metrics. It is compatible and easy connectable with InfluxDB, Prometheus and Graphite what was the main reason of decision of using it for project results' presentation.
+
+![](img/grafana-supported-datasources.png)
 
 The most suitable method to use it with Kubernetes is to install it with helm:
 
@@ -57,9 +70,19 @@ $ kubectl get secret --namespace default grafana -o jsonpath="{.data.admin-passw
 
 The method to view Grafana Dashboard is presented in the next section of this report.
 
-# InfluxDb
+# InfluxDB
 
-InfluxDB is an open-source database designed for time series storage by InfluxLabs. Data is stored in tables or in trees and for every piece of it a _time column with a timestamp is present. This is an example of push architecture - data must be directly written into the database. It is similar to SQL databases but is additionally optimized to handle time series data. In addition, a query language InfluxQl similar to SQL has been designed.
+`InfluxDB` is an open-source database designed for time series storage by InfluxLabs. Data is stored in tables or in trees and for every piece of it a _time column with a timestamp is present. This is an example of push architecture - data must be directly written into the database. It is similar to SQL databases but is additionally optimized to handle time series data. In addition, a query language InfluxQl similar to SQL has been designed.
+
+## TICK stack
+
+![](img/tick.png)
+
+## InfluxQL
+
+```sql
+SELECT <field_key>[,<field_key>,<tag_key>] FROM <measurement_name>[,<measurement_name>]
+```
 
 ## Line protocol
 
@@ -90,7 +113,7 @@ From hardware side, it is recommended to use SSDs to store data. In addition oth
 
 ```console
 $ helm repo add influxdata https://helm.influxdata.com
-$ helm upgrade -i influxdb influxdata/influxdb
+$ helm upgrade -i influxdb influxdata/influxdb -n monitoring
 ```
 
 ## Port-forwarding for Grafana
@@ -103,9 +126,8 @@ kubectl --namespace default port-forward $POD_NAME 3000
 
 ## Telegraf
 
-Telegraf is used here to provide metrics source for InfluxDB.
+## Installation
 
-Installation:
 ```console
 $ KUBERNETES_HOST=$(minikube -p lsc ip)
 $ helm upgrade --install -n monitoring telegraf-ds \
@@ -115,12 +137,24 @@ influxdata/telegraf-ds
 ```
 
 Metrics are being pulled from docker socket - telegraf is running as `DaemonSet`
-
 ```console
-kubectl describe cm -n monitoring telegraf-ds | grep -C 1 docker
+kubectl describe cm -n monitoring telegraf-ds
+```
 
+
+```toml
+(...)
 [[inputs.docker]]
 endpoint = "unix:///var/run/docker.sock"
+(..)
+[[outputs.influxdb]]
+  database = "telegraf"
+  timeout = "5s"
+  urls = [
+    "http://influxdb.monitoring.svc:8086"
+  ]
+  user_agent = "telegraf"
+(...)
 ```
 
 ## Verify if metrics are sunk into InfluxDb
@@ -170,7 +204,6 @@ name: docker_container_mem
 time mean
 ---- ----
 0    0.4698723762118421
-
 ```
 
 Or to verify if the node is healthy
@@ -205,24 +238,134 @@ Import example Docker [dashboard](https://grafana.com/grafana/dashboards/1150)
 
 ![](img/influxdb-dashboards.png)
 
+# Autoscaling based on InfluxDB metrics
+
+Kubernetes natively supports scaling based on `CPU` and `MEM` collectec by `metrics-server`. Those metrics are reported by each node`kubelet`.
+
+Scaling kubernetes workloads based on own metrics might be a challenging task.
+
+However there is a CNCF project - [Kubernetes Event-Driven Autoscaling](https://keda.sh/) that has integration with more advanced product than `InfluxDB` - `InfluxDB2`.
+
+## Supported scalers
+
+![](img/keda-scalers.png)
+
+![](img/keda-influx-scaling.png)
+
+## Installation
+
+```console
+helm repo add kedacore https://kedacore.github.io/charts
+kubectl create namespace keda
+helm install keda kedacore/keda --namespace keda
+```
+
+Our approach focused on a Job pattern - each event should trigger quick running jobs, that might for example process spike of events.
+
+## ScaledJob
+
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: influxdb-consumer
+  namespace: lsc
+spec:
+  jobTargetRef:
+    template:
+      spec:
+        containers:
+        - name: influxdb-scaling
+          image: alpine
+          imagePullPolicy: Always
+          command: ["sleep", "20"]
+        restartPolicy: Never
+   triggers:
+  - type: influxdb
+    metadata:
+      serverURL: http://influx-influxdb2.monitoring.svc:80
+      thresholdValue: '2'
+      organizationName: influxdata
+      query: |
+        from(bucket: "influxdb-scaling") 
+        |> range(start: -5m) 
+        |> filter(fn: (r) => r._measurement == "scaling")
+      authToken: REDACTED
+      metricName: influx-metric 
+```
+
+```
+kubectl apply -f influxdb-scaling.yml
+```
+
+After insertion of above threshold value metrics to  `influx-scaling` bucket we might notice custom scaling
+
+![](img/scaling-jobs.png)
+
+
+# InfluxDB2
+
+`InfluxDB2` is a advanced version with features like build-in UI or agents authorization.
+
+## Installation
+
+```console
+helm upgrade --install influxdb2 influxdata/influxdb2 -n monitoring
+```
+
+## UI
+
+![](img/influxdb2-measurements.png)
+
+![](img/influxdb2-test.png)
+
+
+## Plugins examples
+
+![](img/influxdb2-plugins.png)
+
+![](img/cs-go.png)
+
+## Scrapers
+
+`InfluxDB2` also supports pull architecture with `Scrapers` feature
+
+![](img/create-scrapers.png)
+
+## Telegraf ouput CM
+
+```toml
+(...)
+[[outputs.influxdb_v2]]
+  bucket = "telegraf"
+  token = REDACTED
+  urls = [
+    "http://influx-influxdb2:80"
+  ]
+  organization = "influxdata"
+(...)
+```
 
 # Prometheus
 
-Prometheus is an open-source set of systems designed for monitoring and alerting. It is able to store metrics as time series data. It also does not need agents to push data directly into database, it has an opportunity tu pull metrics from defined endopints.
+Prometheus is an open-source set of systems designed for monitoring and alerting. It is able to store metrics as time series data. It also does not need agents to push data directly into database, it has an opportunity tu `pull` metrics from defined endopints.
 
 It is designed for high reliability, even under failure conditions, so it suits problems when 100% accuracy is not a crucial issue.
 
 All data is stored as time series, defined here as streams of timestamped values belonging to one of defined metrics identified by unique metric names.
 
-Like InfluxDB, Prometheus has also its own query language named PrometheusQL.
+Like InfluxDB, Prometheus has also its own query language named `PrometheusQL`.
 
-## Chart installation
+## Installation
 
 ```console
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm install prometheus prometheus-community/prometheus -n monitoring
 ```
 
+## Architecture
+
+![](img/prometheus-stack.png)
 
 ![](img/prometheus-components.png)
 
@@ -234,6 +377,10 @@ server-url: http://prometheus-server.monitoring.svc:80
 Grafana dashboard id - 7249 - [Kubernetes Cluster](https://grafana.com/grafana/dashboards/7249)
 
 ![](img/prometheus-cluster-dashboard.png)
+
+## HA
+
+`Promscale` supports running Prometheus in **High Availability (HA)**. This means that you can have multiple Prometheus instances running as "HA pairs". Such "HA pairs" (what we will call clusters from now on) are simply two or more identical Prometheus instances running on different machines/containers. These instances scrape the same targets and should thus have very similar data (the differences occur because scrapes happen at slightly different times). You can think of a cluster as a group of similar Prometheus instances that are all scraping the same targets and replicas as individual Prometheus instance in that group.
 
 ## Access Prometheus UI
 
@@ -286,6 +433,14 @@ Used Graphite image automatically contains collectd deamon which is supporting m
 It is possible to view metrics directly from the Graphite dashboard, example with number of HTTP 200 responses is shown below:
 ![](img/graphite-dashboard.png)
 
+## Graphite line protocol
+
+Graphite has its own metrics format - a protoplast to `linie protocol`
+
+```console
+TOKEN@.metricname value [timestamp]
+```
+
 # InfluxDB vs Prometheus vs Graphite
 
 InfluxDB and Graphite are mostly focused on storage of time series data, while Prometheus is more complicated system which includes e.g. trending and alerting tools. What is more, Prometheus is more like a pull architecture while the others needs their data to be directly pushed to them.
@@ -301,3 +456,8 @@ InfluxDB has the most suitable data storage for event logging which is a variant
 * [Telegraf](https://www.influxdata.com/integration/kubernetes-monitoring/)
 * [Prometheus](https://prometheus.io/)
 * [Graphite](https://graphiteapp.org/)
+
+# Reffered by
+
+* Michał Dygas
+* Piotr Wróbel

@@ -1,0 +1,27 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: influxdb-consumer
+  namespace: lsc
+spec:
+  jobTargetRef:
+    template:
+      spec:
+        containers:
+        - name: influxdb-scaling
+          image: alpine
+          imagePullPolicy: Always
+          command: ["sleep", "20"]
+        restartPolicy: Never
+   triggers:
+  - type: influxdb
+    metadata:
+      serverURL: http://influx-influxdb2.monitoring.svc:80
+      thresholdValue: '2'
+      organizationName: influxdata
+      query: |
+        from(bucket: "influxdb-scaling") 
+        |> range(start: -5m) 
+        |> filter(fn: (r) => r._measurement == "scaling")
+      authToken: REDACTED
+      metricName: influx-metric 
