@@ -369,7 +369,7 @@ helm install prometheus prometheus-community/prometheus -n monitoring
 
 ![](img/prometheus-components.png)
 
-## Setup Graphana datasource the same way
+## Setup Grafana datasource the same way
 
 ```
 server-url: http://prometheus-server.monitoring.svc:80
